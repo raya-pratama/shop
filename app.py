@@ -4,64 +4,67 @@ import requests
 # --- KONFIGURASI (Ambil dari Secrets) ---
 TOKEN_BOT = st.secrets["TOKEN_BOT"]
 CHAT_ID_KAMU = st.secrets["CHAT_ID_KAMU"]
-LINK_PEMBAYARAN = "https://link-pembayaran-kamu.com" # Ganti dengan link QRIS/Dana/Midtrans
+QRIS_IMAGE_URL = "https://link-ke-foto-qris-kamu.com/qris.jpg" # Ganti dengan link foto QRIS kamu
 
-def kirim_ke_telegram(pesan):
-    url = f"https://api.telegram.org/bot{TOKEN_BOT}/sendMessage"
-    data = {"chat_id": CHAT_ID_KAMU, "text": pesan, "parse_mode": "Markdown"}
-    requests.post(url, data=data)
+def kirim_ke_telegram(pesan, file=None):
+    url_msg = f"https://api.telegram.org/bot{TOKEN_BOT}/sendMessage"
+    requests.post(url_msg, data={"chat_id": CHAT_ID_KAMU, "text": pesan, "parse_mode": "Markdown"})
+    
+    if file:
+        url_file = f"https://api.telegram.org/bot{TOKEN_BOT}/sendPhoto"
+        requests.post(url_file, data={"chat_id": CHAT_ID_KAMU}, files={"photo": file})
 
 # --- SETTING HALAMAN ---
-st.set_page_config(page_title="Digital Shop Pop-up", layout="wide")
+st.set_page_config(page_title="Digital Shop", layout="wide")
 
-# --- FUNGSI DIALOG (MODAL/ALERT) ---
-@st.dialog("Konfirmasi Pembelian")
-def form_checkout(produk):
-    st.write(f"Anda memilih: **{produk['nama']}**")
-    st.write(f"Total Harga: **Rp{produk['harga']:,}**")
+@st.dialog("Langkah Pembayaran")
+def bayar_dan_konfirmasi(produk):
+    st.warning(f"Silakan transfer **Rp{produk['harga']:,}** terlebih dahulu.")
     
-    email = st.text_input("Masukkan Email Anda:", placeholder="contoh@mail.com")
-    st.caption("Instruksi pembayaran akan dikirim ke email ini.")
+    # 1. TAMPILKAN QRIS
+    st.image(QRIS_IMAGE_URL, caption="Scan QRIS ini untuk membayar (GoPay/Dana/OVO/ShopeePay)")
     
-    if st.button("Kirim Pesanan & Bayar 🚀", use_container_width=True):
-        if email:
-            # Kirim Notifikasi ke Telegram
+    st.divider()
+    
+    # 2. FORM KONFIRMASI (Hanya diisi setelah bayar)
+    st.subheader("Konfirmasi Setelah Bayar")
+    email = st.text_input("Masukkan Email Anda:")
+    bukti_bayar = st.file_uploader("Upload Bukti Transfer (Gambar)", type=['jpg', 'png', 'jpeg'])
+    
+    if st.button("Sudah Bayar & Kirim Pesanan 🚀", use_container_width=True):
+        if email and bukti_bayar:
+            # Notifikasi ke Telegram
             pesan_tele = f"""
-🚀 *PESANAN BARU!*
+💰 *PEMBAYARAN TERKONFIRMASI!*
 --------------------------
 📦 *Produk:* {produk['nama']}
 💰 *Harga:* Rp{produk['harga']:,}
 📧 *Email:* {email}
 --------------------------
+Admin, silakan cek mutasi dan kirim produk!
             """
-            kirim_ke_telegram(pesan_tele)
+            # Kirim Pesan & Foto Bukti ke Telegram
+            kirim_ke_telegram(pesan_tele, bukti_bayar.getvalue())
             
-            # Tampilkan link bayar
-            st.success("Pesanan Terdaftar!")
-            st.link_button("KLIK DI SINI UNTUK BAYAR (QRIS/DANA)", LINK_PEMBAYARAN, use_container_width=True)
-            st.info("Setelah bayar, silakan tutup jendela ini.")
+            st.success("Terima kasih! Bukti bayar telah dikirim ke Admin. Produk akan segera diproses ke email Anda.")
+            st.balloons()
         else:
-            st.error("Email wajib diisi!")
+            st.error("Mohon isi email dan upload bukti transfer!")
 
-# --- TAMPILAN UTAMA ---
-st.title("🛒 Toko Digital")
-st.write("Klik tombol pada produk untuk memunculkan form pembayaran.")
-
+# --- TAMPILAN KATALOG ---
+st.title("🛒 Digital Store")
 products = [
-    {"id": "1", "nama": "Modul CCNA", "harga": 50000, "gambar": "https://via.placeholder.com/300x200?text=CCNA", "desc": "Lab lengkap Cisco."},
-    {"id": "2", "nama": "Python Auto", "harga": 75000, "gambar": "https://via.placeholder.com/300x200?text=Python", "desc": "Bot otomatisasi."},
-    {"id": "3", "nama": "E-Book Mikrotik", "harga": 45000, "gambar": "https://via.placeholder.com/300x200?text=Mikrotik", "desc": "Kuasai RouterOS."}
+    {"id": "1", "nama": "Modul CCNA", "harga": 50000, "gambar": "https://via.placeholder.com/300x200?text=CCNA"},
+    {"id": "2", "nama": "Python Auto", "harga": 75000, "gambar": "https://via.placeholder.com/300x200?text=Python"}
 ]
 
 cols = st.columns(3)
-
 for i, p in enumerate(products):
     with cols[i % 3]:
         with st.container(border=True):
             st.image(p['gambar'], use_container_width=True)
             st.subheader(p['nama'])
-            st.write(f"**Rp{p['harga']:,}**")
+            st.write(f"Harga: **Rp{p['harga']:,}**")
             
-            # Saat diklik, fungsi dialog dipanggil
             if st.button(f"Beli {p['nama']}", key=f"btn_{p['id']}", use_container_width=True):
-                form_checkout(p)
+                bayar_dan_konfirmasi(p)
