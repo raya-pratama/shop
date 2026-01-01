@@ -76,7 +76,7 @@ st.title("🛒 Toko Digital")
 st.write("Dapatkan produk digital terbaik dengan pembayaran instan.")
 
 products = [
-    {"id": "PROD-001", "nama": "Modul Cisco CCNA", "harga": 50000, "gambar": "https://via.placeholder.com/300x200?text=CCNA"},
+    {"id": "PROD-001", "nama": "Modul Cisco CCNA", "harga": 0, "gambar": "https://via.placeholder.com/300x200?text=CCNA"},
     {"id": "PROD-002", "nama": "Python Automation", "harga": 75000, "gambar": "https://via.placeholder.com/300x200?text=Python"},
     {"id": "PROD-003", "nama": "E-Book Mikrotik", "harga": 45000, "gambar": "https://via.placeholder.com/300x200?text=Mikrotik"}
 ]
