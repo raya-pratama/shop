@@ -1,9 +1,10 @@
 import streamlit as st
 import requests
 
-# --- KONFIGURASI TELEGRAM (Ambil dari Secrets) ---
+# --- KONFIGURASI (Ambil dari Secrets) ---
 TOKEN_BOT = st.secrets["TOKEN_BOT"]
 CHAT_ID_KAMU = st.secrets["CHAT_ID_KAMU"]
+LINK_PEMBAYARAN = "https://link-pembayaran-kamu.com" # Ganti dengan link QRIS/Dana/Midtrans
 
 def kirim_ke_telegram(pesan):
     url = f"https://api.telegram.org/bot{TOKEN_BOT}/sendMessage"
@@ -11,82 +12,56 @@ def kirim_ke_telegram(pesan):
     requests.post(url, data=data)
 
 # --- SETTING HALAMAN ---
-st.set_page_config(page_title="Digital Card Shop", layout="wide")
+st.set_page_config(page_title="Digital Shop Pop-up", layout="wide")
 
-st.title("🛒 Digital Store")
-st.write("Pilih produk terbaik kami dan selesaikan pembayaran.")
+# --- FUNGSI DIALOG (MODAL/ALERT) ---
+@st.dialog("Konfirmasi Pembelian")
+def form_checkout(produk):
+    st.write(f"Anda memilih: **{produk['nama']}**")
+    st.write(f"Total Harga: **Rp{produk['harga']:,}**")
+    
+    email = st.text_input("Masukkan Email Anda:", placeholder="contoh@mail.com")
+    st.caption("Instruksi pembayaran akan dikirim ke email ini.")
+    
+    if st.button("Kirim Pesanan & Bayar 🚀", use_container_width=True):
+        if email:
+            # Kirim Notifikasi ke Telegram
+            pesan_tele = f"""
+🚀 *PESANAN BARU!*
+--------------------------
+📦 *Produk:* {produk['nama']}
+💰 *Harga:* Rp{produk['harga']:,}
+📧 *Email:* {email}
+--------------------------
+            """
+            kirim_ke_telegram(pesan_tele)
+            
+            # Tampilkan link bayar
+            st.success("Pesanan Terdaftar!")
+            st.link_button("KLIK DI SINI UNTUK BAYAR (QRIS/DANA)", LINK_PEMBAYARAN, use_container_width=True)
+            st.info("Setelah bayar, silakan tutup jendela ini.")
+        else:
+            st.error("Email wajib diisi!")
 
-# --- DATA PRODUK ---
-# Ganti URL gambar dengan link gambar aslimu
+# --- TAMPILAN UTAMA ---
+st.title("🛒 Toko Digital")
+st.write("Klik tombol pada produk untuk memunculkan form pembayaran.")
+
 products = [
-    {
-        "id": "1",
-        "nama": "Modul Cisco CCNA",
-        "harga": 50000,
-        "gambar": "https://via.placeholder.com/300x200.png?text=Modul+CCNA",
-        "desc": "Panduan lengkap konfigurasi Routing & Switching."
-    },
-    {
-        "id": "2",
-        "nama": "Python Automation",
-        "harga": 75000,
-        "gambar": "https://via.placeholder.com/300x200.png?text=Python+Auto",
-        "desc": "Belajar membuat bot otomatisasi dengan Python."
-    },
-    {
-        "id": "3",
-        "nama": "E-Book Mikrotik",
-        "harga": 45000,
-        "gambar": "https://via.placeholder.com/300x200.png?text=Mikrotik+Guide",
-        "desc": "Kuasai MTCNA dalam waktu singkat."
-    }
+    {"id": "1", "nama": "Modul CCNA", "harga": 50000, "gambar": "https://via.placeholder.com/300x200?text=CCNA", "desc": "Lab lengkap Cisco."},
+    {"id": "2", "nama": "Python Auto", "harga": 75000, "gambar": "https://via.placeholder.com/300x200?text=Python", "desc": "Bot otomatisasi."},
+    {"id": "3", "nama": "E-Book Mikrotik", "harga": 45000, "gambar": "https://via.placeholder.com/300x200?text=Mikrotik", "desc": "Kuasai RouterOS."}
 ]
 
-# --- TAMPILAN CARD ---
-cols = st.columns(3) # Membuat 3 kolom menyamping
+cols = st.columns(3)
 
 for i, p in enumerate(products):
     with cols[i % 3]:
-        with st.container(border=True): # Membuat border seperti Card
+        with st.container(border=True):
             st.image(p['gambar'], use_container_width=True)
             st.subheader(p['nama'])
-            st.write(f"**Harga: Rp{p['harga']:,}**")
-            st.caption(p['desc'])
+            st.write(f"**Rp{p['harga']:,}**")
             
-            # Tombol Beli tiap produk
-            if st.button(f"Beli {p['nama']}", key=f"btn_{p['id']}"):
-                st.session_state['produk_dipilih'] = p
-                st.session_state['show_form'] = True
-
-st.divider()
-
-# --- FORM PEMBELIAN (Akan muncul jika tombol di klik) ---
-if st.session_state.get('show_form'):
-    p = st.session_state['produk_dipilih']
-    st.subheader(f"📝 Form Pembelian: {p['nama']}")
-    
-    with st.form("form_checkout"):
-        email_user = st.text_input("Masukkan Email Anda:", placeholder="contoh@mail.com")
-        st.write(f"Total yang harus dibayar: **Rp{p['harga']:,}**")
-        
-        btn_confirm = st.form_submit_button("Konfirmasi & Kirim Pesanan")
-        
-        if btn_confirm:
-            if email_user:
-                # Susun pesan untuk Telegram
-                pesan = f"""
-🚀 *PESANAN BARU MASUK!*
---------------------------
-📦 *Produk:* {p['nama']}
-💰 *Harga:* Rp{p['harga']:,}
-📧 *Email:* {email_user}
---------------------------
-                """
-                kirim_ke_telegram(pesan)
-                
-                st.success(f"Terima kasih! Pesanan {p['nama']} telah diteruskan ke admin. Cek email Anda segera.")
-                st.balloons()
-                # Reset form
-                st.session_state['show_form'] = False
-            else:
-                st.error("Email wajib diisi!")
+            # Saat diklik, fungsi dialog dipanggil
+            if st.button(f"Beli {p['nama']}", key=f"btn_{p['id']}", use_container_width=True):
+                form_checkout(p)
