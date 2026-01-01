@@ -5,7 +5,7 @@ import requests
 TOKEN_BOT = st.secrets["TOKEN_BOT"]
 CHAT_ID_KAMU = st.secrets["CHAT_ID_KAMU"]
 # Ganti dengan link gambar QRIS kamu (bisa upload ke GitHub atau Imgur)
-URL_QRIS = "https://your-link-to-qris.com/my-qris.png" 
+URL_QRIS = "WhatsApp Image 2026-01-01 at 19.46.17.jpeg" 
 
 def kirim_ke_telegram(pesan):
     url = f"https://api.telegram.org/bot{TOKEN_BOT}/sendMessage"
