@@ -2,8 +2,8 @@ import streamlit as st
 import requests
 
 # --- KONFIGURASI TELEGRAM (Ambil dari Secrets) ---
-TOKEN_BOT = st.secrets["8524772260:AAF-RVpHSIqzwwsbkQ1D-6VEqQ2_YC3smhY"]
-CHAT_ID_KAMU = st.secrets["6392404663"]
+TOKEN_BOT = st.secrets["TOKEN_BOT"]
+CHAT_ID_KAMU = st.secrets["CHAT_ID_KAMU"]
 
 def kirim_ke_telegram(pesan):
     url = f"https://api.telegram.org/bot{TOKEN_BOT}/sendMessage"
