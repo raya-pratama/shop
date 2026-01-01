@@ -43,30 +43,42 @@ def buat_link_pembayaran(produk, email):
     return response.json()
 
 # --- 2. TAMPILAN POP-UP (DIALOG) ---
-@st.dialog("Konfirmasi Pembelian")
+@st.dialog("Konfirmasi Pesanan")
 def checkout_otomatis(produk):
     st.write(f"Produk: **{produk['nama']}**")
-    st.write(f"Total: **Rp{produk['harga']:,}**")
+    
+    # Tampilkan label gratis jika harga 0
+    if produk['harga'] == 0:
+        st.success("Produk ini **GRATIS**! Silakan isi email untuk mendapatkan akses.")
+    else:
+        st.write(f"Total: **Rp{produk['harga']:,}**")
     
     email = st.text_input("Masukkan Email Anda:", placeholder="email@anda.com")
-    st.caption("Link pembayaran QRIS/E-Wallet akan muncul setelah klik tombol di bawah.")
     
-    if st.button("Proses Pembayaran 💳", use_container_width=True):
+    if st.button("Proses Sekarang 🚀", use_container_width=True):
         if email:
-            with st.spinner("Menghubungkan ke Midtrans..."):
-                res = buat_link_pembayaran(produk, email)
-                link_bayar = res.get('redirect_url')
-                
-                if link_bayar:
-                    # Kirim info ke Telegram Admin bahwa ada yang baru buat order
-                    pesan_admin = f"⏳ *PENDING ORDER*\n\n📦 {produk['nama']}\n📧 {email}\n💰 Rp{produk['harga']:,}\n\nUser sedang menuju halaman pembayaran."
-                    kirim_ke_telegram(pesan_admin)
+            # --- JIKA PRODUK GRATIS ---
+            if produk['harga'] == 0:
+                with st.spinner("Memproses pesanan gratis..."):
+                    pesan_free = f"🎁 *PESANAN GRATIS*\n\n📦 {produk['nama']}\n📧 {email}\n\nUser telah mengklaim produk gratis."
+                    kirim_ke_telegram(pesan_free)
+                    st.success("Berhasil! Produk akan dikirim ke email Anda.")
+                    st.balloons()
+            
+            # --- JIKA PRODUK BERBAYAR ---
+            else:
+                with st.spinner("Menghubungkan ke Midtrans..."):
+                    res = buat_link_pembayaran(produk, email)
+                    link_bayar = res.get('redirect_url')
                     
-                    st.success("Berhasil! Silakan klik tombol bayar di bawah:")
-                    st.link_button("🔥 BAYAR SEKARANG (QRIS/DANA/GOPAY)", link_bayar, use_container_width=True)
-                    st.info("Setelah bayar, simpan bukti bayar Anda.")
-                else:
-                    st.error("Gagal mengambil link pembayaran. Cek Server Key Midtrans Anda.")
+                    if link_bayar:
+                        pesan_admin = f"⏳ *PENDING ORDER*\n\n📦 {produk['nama']}\n📧 {email}\n💰 Rp{produk['harga']:,}"
+                        kirim_ke_telegram(pesan_admin)
+                        
+                        st.success("Link Pembayaran Berhasil Dibuat!")
+                        st.link_button("🔥 BAYAR SEKARANG (QRIS/DANA)", link_bayar, use_container_width=True)
+                    else:
+                        st.error("Gagal terhubung ke Midtrans. Cek konfigurasi API Anda.")
         else:
             st.error("Email wajib diisi!")
 
