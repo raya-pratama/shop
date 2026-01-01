@@ -1,61 +1,84 @@
 import streamlit as st
 import requests
+import base64
+import time
 
-# --- KONFIGURASI (Ambil dari Secrets) ---
+# --- 1. KONFIGURASI (Pastikan sudah ada di Secrets) ---
+SERVER_KEY = st.secrets["MIDTRANS_SERVER_KEY"]
 TOKEN_BOT = st.secrets["TOKEN_BOT"]
 CHAT_ID_KAMU = st.secrets["CHAT_ID_KAMU"]
-QRIS_IMAGE_URL = "https://link-ke-foto-qris-kamu.com/qris.jpg" # Ganti dengan link foto QRIS kamu
 
-def kirim_ke_telegram(pesan, file=None):
-    url_msg = f"https://api.telegram.org/bot{TOKEN_BOT}/sendMessage"
-    requests.post(url_msg, data={"chat_id": CHAT_ID_KAMU, "text": pesan, "parse_mode": "Markdown"})
-    
-    if file:
-        url_file = f"https://api.telegram.org/bot{TOKEN_BOT}/sendPhoto"
-        requests.post(url_file, data={"chat_id": CHAT_ID_KAMU}, files={"photo": file})
+# Fungsi Header untuk Midtrans
+def get_auth_header():
+    auth_string = f"{SERVER_KEY}:"
+    encoded_auth = base64.b64encode(auth_string.encode()).decode()
+    return {"Authorization": f"Basic {encoded_auth}", "Content-Type": "application/json"}
 
-# --- SETTING HALAMAN ---
-st.set_page_config(page_title="Digital Shop", layout="wide")
+# Fungsi kirim notifikasi ke Telegram
+def kirim_ke_telegram(pesan):
+    url = f"https://api.telegram.org/bot{TOKEN_BOT}/sendMessage"
+    requests.post(url, data={"chat_id": CHAT_ID_KAMU, "text": pesan, "parse_mode": "Markdown"})
 
-@st.dialog("Langkah Pembayaran")
-def bayar_dan_konfirmasi(produk):
-    st.warning(f"Silakan transfer **Rp{produk['harga']:,}** terlebih dahulu.")
+# Fungsi membuat transaksi di Midtrans
+def buat_link_pembayaran(produk, email):
+    # Gunakan URL sandbox untuk latihan, ganti ke 'api.midtrans.com' untuk asli
+    url = "https://app.sandbox.midtrans.com/snap/v1/transactions" 
+    order_id = f"ORDER-{int(time.time())}" # ID unik berdasarkan waktu
     
-    # 1. TAMPILKAN QRIS
-    st.image(QRIS_IMAGE_URL, caption="Scan QRIS ini untuk membayar (GoPay/Dana/OVO/ShopeePay)")
+    payload = {
+        "transaction_details": {
+            "order_id": order_id,
+            "gross_amount": produk['harga']
+        },
+        "customer_details": {"email": email},
+        "item_details": [{
+            "id": produk['id'],
+            "price": produk['harga'],
+            "quantity": 1,
+            "name": produk['nama']
+        }]
+    }
     
-    st.divider()
+    response = requests.post(url, json=payload, headers=get_auth_header())
+    return response.json()
+
+# --- 2. TAMPILAN POP-UP (DIALOG) ---
+@st.dialog("Konfirmasi Pembelian")
+def checkout_otomatis(produk):
+    st.write(f"Produk: **{produk['nama']}**")
+    st.write(f"Total: **Rp{produk['harga']:,}**")
     
-    # 2. FORM KONFIRMASI (Hanya diisi setelah bayar)
-    st.subheader("Konfirmasi Setelah Bayar")
-    email = st.text_input("Masukkan Email Anda:")
-    bukti_bayar = st.file_uploader("Upload Bukti Transfer (Gambar)", type=['jpg', 'png', 'jpeg'])
+    email = st.text_input("Masukkan Email Anda:", placeholder="email@anda.com")
+    st.caption("Link pembayaran QRIS/E-Wallet akan muncul setelah klik tombol di bawah.")
     
-    if st.button("Sudah Bayar & Kirim Pesanan 🚀", use_container_width=True):
-        if email and bukti_bayar:
-            # Notifikasi ke Telegram
-            pesan_tele = f"""
-💰 *PEMBAYARAN TERKONFIRMASI!*
---------------------------
-📦 *Produk:* {produk['nama']}
-💰 *Harga:* Rp{produk['harga']:,}
-📧 *Email:* {email}
---------------------------
-Admin, silakan cek mutasi dan kirim produk!
-            """
-            # Kirim Pesan & Foto Bukti ke Telegram
-            kirim_ke_telegram(pesan_tele, bukti_bayar.getvalue())
-            
-            st.success("Terima kasih! Bukti bayar telah dikirim ke Admin. Produk akan segera diproses ke email Anda.")
-            st.balloons()
+    if st.button("Proses Pembayaran 💳", use_container_width=True):
+        if email:
+            with st.spinner("Menghubungkan ke Midtrans..."):
+                res = buat_link_pembayaran(produk, email)
+                link_bayar = res.get('redirect_url')
+                
+                if link_bayar:
+                    # Kirim info ke Telegram Admin bahwa ada yang baru buat order
+                    pesan_admin = f"⏳ *PENDING ORDER*\n\n📦 {produk['nama']}\n📧 {email}\n💰 Rp{produk['harga']:,}\n\nUser sedang menuju halaman pembayaran."
+                    kirim_ke_telegram(pesan_admin)
+                    
+                    st.success("Berhasil! Silakan klik tombol bayar di bawah:")
+                    st.link_button("🔥 BAYAR SEKARANG (QRIS/DANA/GOPAY)", link_bayar, use_container_width=True)
+                    st.info("Setelah bayar, simpan bukti bayar Anda.")
+                else:
+                    st.error("Gagal mengambil link pembayaran. Cek Server Key Midtrans Anda.")
         else:
-            st.error("Mohon isi email dan upload bukti transfer!")
+            st.error("Email wajib diisi!")
 
-# --- TAMPILAN KATALOG ---
-st.title("🛒 Digital Store")
+# --- 3. TAMPILAN UTAMA (KATALOG) ---
+st.set_page_config(page_title="My Digital Store", layout="wide")
+st.title("🛒 Toko Digital")
+st.write("Dapatkan produk digital terbaik dengan pembayaran instan.")
+
 products = [
-    {"id": "1", "nama": "Modul CCNA", "harga": 50000, "gambar": "https://via.placeholder.com/300x200?text=CCNA"},
-    {"id": "2", "nama": "Python Auto", "harga": 75000, "gambar": "https://via.placeholder.com/300x200?text=Python"}
+    {"id": "PROD-001", "nama": "Modul Cisco CCNA", "harga": 50000, "gambar": "https://via.placeholder.com/300x200?text=CCNA"},
+    {"id": "PROD-002", "nama": "Python Automation", "harga": 75000, "gambar": "https://via.placeholder.com/300x200?text=Python"},
+    {"id": "PROD-003", "nama": "E-Book Mikrotik", "harga": 45000, "gambar": "https://via.placeholder.com/300x200?text=Mikrotik"}
 ]
 
 cols = st.columns(3)
@@ -67,4 +90,4 @@ for i, p in enumerate(products):
             st.write(f"Harga: **Rp{p['harga']:,}**")
             
             if st.button(f"Beli {p['nama']}", key=f"btn_{p['id']}", use_container_width=True):
-                bayar_dan_konfirmasi(p)
+                checkout_otomatis(p)
