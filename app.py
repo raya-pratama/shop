@@ -1,96 +1,63 @@
 import streamlit as st
 import requests
-import base64
-import time
 
-# --- 1. KONFIGURASI (Pastikan sudah ada di Secrets) ---
-SERVER_KEY = st.secrets["MIDTRANS_SERVER_KEY"]
+# --- 1. KONFIGURASI (Ambil dari Secrets) ---
 TOKEN_BOT = st.secrets["TOKEN_BOT"]
 CHAT_ID_KAMU = st.secrets["CHAT_ID_KAMU"]
+# Ganti dengan link gambar QRIS kamu (bisa upload ke GitHub atau Imgur)
+URL_QRIS = "https://your-link-to-qris.com/my-qris.png" 
 
-# Fungsi Header untuk Midtrans
-def get_auth_header():
-    auth_string = f"{SERVER_KEY}:"
-    encoded_auth = base64.b64encode(auth_string.encode()).decode()
-    return {"Authorization": f"Basic {encoded_auth}", "Content-Type": "application/json"}
-
-# Fungsi kirim notifikasi ke Telegram
 def kirim_ke_telegram(pesan):
     url = f"https://api.telegram.org/bot{TOKEN_BOT}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID_KAMU, "text": pesan, "parse_mode": "Markdown"})
+    payload = {"chat_id": CHAT_ID_KAMU, "text": pesan, "parse_mode": "Markdown"}
+    try:
+        requests.post(url, data=payload)
+    except Exception as e:
+        st.error(f"Gagal lapor ke Telegram: {e}")
 
-# Fungsi membuat transaksi di Midtrans
-def buat_link_pembayaran(produk, email):
-    # Gunakan URL sandbox untuk latihan, ganti ke 'api.midtrans.com' untuk asli
-    url = "https://app.sandbox.midtrans.com/snap/v1/transactions" 
-    order_id = f"ORDER-{int(time.time())}" # ID unik berdasarkan waktu
-    
-    payload = {
-        "transaction_details": {
-            "order_id": order_id,
-            "gross_amount": produk['harga']
-        },
-        "customer_details": {"email": email},
-        "item_details": [{
-            "id": produk['id'],
-            "price": produk['harga'],
-            "quantity": 1,
-            "name": produk['nama']
-        }]
-    }
-    
-    response = requests.post(url, json=payload, headers=get_auth_header())
-    return response.json()
-
-# --- 2. TAMPILAN POP-UP (DIALOG) ---
-@st.dialog("Konfirmasi Pesanan")
-def checkout_otomatis(produk):
+# --- 2. FUNGSI ALERT/POP-UP ---
+@st.dialog("Konfirmasi Pembayaran")
+def pop_up_bayar(produk):
     st.write(f"Produk: **{produk['nama']}**")
+    st.write(f"Total Transfer: **Rp{produk['harga']:,}**")
+    st.divider()
     
-    # Tampilkan label gratis jika harga 0
-    if produk['harga'] == 0:
-        st.success("Produk ini **GRATIS**! Silakan isi email untuk mendapatkan akses.")
-    else:
-        st.write(f"Total: **Rp{produk['harga']:,}**")
+    # Menampilkan QRIS
+    st.image(URL_QRIS, caption="Scan menggunakan Dana, GoPay, OVO, atau M-Banking", use_container_width=True)
     
-    email = st.text_input("Masukkan Email Anda:", placeholder="email@anda.com")
+    st.info("💡 Silakan transfer sesuai nominal, lalu isi form di bawah untuk konfirmasi.")
     
-    if st.button("Proses Sekarang 🚀", use_container_width=True):
+    email = st.text_input("Masukkan Email Anda:", placeholder="email@contoh.com")
+    
+    if st.button("Sudah Bayar & Kirim Notifikasi 🚀", use_container_width=True):
         if email:
-            # --- JIKA PRODUK GRATIS ---
-            if produk['harga'] == 0:
-                with st.spinner("Memproses pesanan gratis..."):
-                    pesan_free = f"🎁 *PESANAN GRATIS*\n\n📦 {produk['nama']}\n📧 {email}\n\nUser telah mengklaim produk gratis."
-                    kirim_ke_telegram(pesan_free)
-                    st.success("Berhasil! Produk akan dikirim ke email Anda.")
-                    st.balloons()
+            # Kirim pesan ke Telegram
+            pesan_admin = f"""
+💰 *ADA PEMBAYARAN MASUK!*
+--------------------------
+📦 *Produk:* {produk['nama']}
+💰 *Nominal:* Rp{produk['harga']:,}
+📧 *Email:* {email}
+--------------------------
+📢 *Segera cek mutasi saldo kamu!*
+            """
+            kirim_ke_telegram(pesan_admin)
             
-            # --- JIKA PRODUK BERBAYAR ---
-            else:
-                with st.spinner("Menghubungkan ke Midtrans..."):
-                    res = buat_link_pembayaran(produk, email)
-                    link_bayar = res.get('redirect_url')
-                    
-                    if link_bayar:
-                        pesan_admin = f"⏳ *PENDING ORDER*\n\n📦 {produk['nama']}\n📧 {email}\n💰 Rp{produk['harga']:,}"
-                        kirim_ke_telegram(pesan_admin)
-                        
-                        st.success("Link Pembayaran Berhasil Dibuat!")
-                        st.link_button("🔥 BAYAR SEKARANG (QRIS/DANA)", link_bayar, use_container_width=True)
-                    else:
-                        st.error("Gagal terhubung ke Midtrans. Cek konfigurasi API Anda.")
+            st.success("Notifikasi terkirim! Admin akan mengecek saldo dan mengirimkan produk ke email Anda secepatnya.")
+            st.balloons()
         else:
-            st.error("Email wajib diisi!")
+            st.error("Mohon isi email agar admin bisa mengirimkan produknya!")
 
-# --- 3. TAMPILAN UTAMA (KATALOG) ---
-st.set_page_config(page_title="My Digital Store", layout="wide")
-st.title("🛒 Toko Digital")
-st.write("Dapatkan produk digital terbaik dengan pembayaran instan.")
+# --- 3. TAMPILAN KATALOG ---
+st.set_page_config(page_title="My Shop QRIS", layout="wide")
+st.title("🛍️ Digital Store (QRIS Payment)")
+st.write("Belanja instan, kirim cepat via Telegram.")
 
+# Daftar Produk (Bisa kamu tambah sesukanya)
 products = [
-    {"id": "PROD-001", "nama": "Modul Cisco CCNA", "harga": 0, "gambar": "https://via.placeholder.com/300x200?text=CCNA"},
-    {"id": "PROD-002", "nama": "Python Automation", "harga": 75000, "gambar": "https://via.placeholder.com/300x200?text=Python"},
-    {"id": "PROD-003", "nama": "E-Book Mikrotik", "harga": 45000, "gambar": "https://via.placeholder.com/300x200?text=Mikrotik"}
+    {"id": "01", "nama": "Modul Cisco CCNA", "harga": 50000, "gambar": "https://via.placeholder.com/300x200?text=CCNA"},
+    {"id": "02", "nama": "E-Book Python", "harga": 75000, "gambar": "https://via.placeholder.com/300x200?text=Python"},
+    {"id": "03", "nama": "Akses Simulator", "harga": 0, "gambar": "https://via.placeholder.com/300x200?text=Gratis"}
 ]
 
 cols = st.columns(3)
@@ -99,7 +66,7 @@ for i, p in enumerate(products):
         with st.container(border=True):
             st.image(p['gambar'], use_container_width=True)
             st.subheader(p['nama'])
-            st.write(f"Harga: **Rp{p['harga']:,}**")
+            st.write(f"Harga: **Rp{p['harga']:,}**" if p['harga'] > 0 else "**GRATIS**")
             
-            if st.button(f"Beli {p['nama']}", key=f"btn_{p['id']}", use_container_width=True):
-                checkout_otomatis(p)
+            if st.button(f"Beli {p['nama']}", key=f"beli_{p['id']}", use_container_width=True):
+                pop_up_bayar(p)
